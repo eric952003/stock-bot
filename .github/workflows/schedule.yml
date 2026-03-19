@@ -1,0 +1,28 @@
+name: Daily Stock Bot
+
+on:
+  schedule:
+    # 設定每天早上 8:30 自動執行 (台灣時間=UTC+8，所以這裡寫 00:30)
+    - cron: '30 0 * * *'
+  workflow_dispatch: # 允許我們手動點擊測試
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 下載程式碼
+      uses: actions/checkout@v3
+      
+    - name: 安裝 Python 環境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: 安裝看盤套件
+      run: pip install yfinance pandas requests
+        
+    - name: 執行股票小秘書
+      env:
+        LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+        LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+      run: python stock_bot.py
