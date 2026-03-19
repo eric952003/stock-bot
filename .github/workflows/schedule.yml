@@ -1,7 +1,6 @@
 name: Daily Stock Bot
 
 on:
-  schedule:
       schedule:
     # 設定台灣時間 09:00, 10:00, 11:00, 12:00, 13:00 發送
     # (台灣 UTC+8，所以對應 UTC 為 01, 02, 03, 04, 05)
