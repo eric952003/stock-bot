@@ -9,9 +9,8 @@ import requests
 CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 USER_ID = os.environ.get('LINE_USER_ID')
 
-# 設定你想觀察的股票代號 (包含剛上市的 009816 和上櫃的 00720B)
+# 設定你想觀察的股票代號 (使用絕對安全的直引號)
 tickers = ['0050.TW', '0052.TW', '009816.TW', '0056.TW', '00720B.TWO', '00725B.TWO', '00931B.TWO', '00937B.TWO', '00722B.TWO', '00761B.TWO']
-
 
 def send_line_message(msg):
     url = 'https://api.line.me/v2/bot/message/push'
