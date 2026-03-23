@@ -29,34 +29,29 @@ def analyze_stocks(tickers):
     
     for ticker in tickers:
         try:
-            # 將資料拉長到 1 年，確保算得出「半年線(120日)」
-            data = yf.download(ticker, period='1y', progress=False)
+            # 🌟 修復核心：改用 yf.Ticker().history()，確保資料格式最乾淨單純
+            stock = yf.Ticker(ticker)
+            data = stock.history(period='1y')
             
             if data.empty:
                 report_message += f"\n代號: {ticker} -> 找不到資料\n"
                 continue
             
-            # 建立一個小工具來安全取出數字
-            def get_val(df, col, idx=-1):
-                try:
-                    val = df[col].iloc[idx]
-                    return float(val.iloc[0]) if isinstance(val, pd.Series) else float(val)
-                except:
-                    return 0.0
-
-            latest_close = get_val(data, 'Close', -1)
-            latest_vol = get_val(data, 'Volume', -1)
+            # 直接取最後一筆資料
+            latest_close = float(data['Close'].iloc[-1])
+            latest_vol = float(data['Volume'].iloc[-1])
             
             # === 1. 計算 KD 指標 ===
             data['L9'] = data['Low'].rolling(window=9).min()
             data['H9'] = data['High'].rolling(window=9).max()
-            data['RSV'] = 100 * (data['Close'] - data['L9']) / (data['H9'] - data['L9'])
-            # 使用 EWM 計算平滑 K 值與 D 值
+            
+            # 🌟 修復核心：分母加上 0.00001，防止債券 ETF 價格不動導致「除以零」當機
+            data['RSV'] = 100 * (data['Close'] - data['L9']) / (data['H9'] - data['L9'] + 0.00001)
             data['K'] = data['RSV'].ewm(com=2, adjust=False).mean()
             data['D'] = data['K'].ewm(com=2, adjust=False).mean()
             
-            latest_K = get_val(data, 'K', -1)
-            latest_D = get_val(data, 'D', -1)
+            latest_K = float(data['K'].iloc[-1])
+            latest_D = float(data['D'].iloc[-1])
             
             if pd.isna(latest_K) or latest_K == 0.0:
                 kd_status = "計算中"
@@ -71,7 +66,7 @@ def analyze_stocks(tickers):
             vol_alert = ""
             if len(data) >= 6:
                 data['VOL_5'] = data['Volume'].rolling(window=5).mean()
-                prev_vol_5 = get_val(data, 'VOL_5', -2)
+                prev_vol_5 = float(data['VOL_5'].iloc[-2])
                 
                 # 如果今日成交量 > 昨天為止的 5日均量 的 2 倍
                 if prev_vol_5 > 0 and latest_vol > (prev_vol_5 * 2):
@@ -83,10 +78,10 @@ def analyze_stocks(tickers):
                 data['SMA_60'] = data['Close'].rolling(window=60).mean()
                 data['SMA_120'] = data['Close'].rolling(window=120).mean()
                 
-                latest_SMA60 = get_val(data, 'SMA_60', -1)
-                latest_SMA120 = get_val(data, 'SMA_120', -1)
-                prev_SMA60 = get_val(data, 'SMA_60', -2)
-                prev_SMA120 = get_val(data, 'SMA_120', -2)
+                latest_SMA60 = float(data['SMA_60'].iloc[-1])
+                latest_SMA120 = float(data['SMA_120'].iloc[-1])
+                prev_SMA60 = float(data['SMA_60'].iloc[-2])
+                prev_SMA120 = float(data['SMA_120'].iloc[-2])
                 
                 if latest_SMA60 > latest_SMA120 and prev_SMA60 <= prev_SMA120:
                     signal = "🟢 季線突破半年線"
@@ -99,8 +94,10 @@ def analyze_stocks(tickers):
             report_message += f"\n代號: {ticker}\n收盤價: {latest_close:.2f}\n長線: {signal}\n指標: {kd_status}{vol_alert}\n"
             
         except Exception as e:
-            report_message += f"\n代號: {ticker} -> 資料處理發生錯誤\n"
+            # 🌟 修復核心：萬一還有錯，把真正的「錯誤原因」抓出來傳到 LINE！
+            report_message += f"\n代號: {ticker} -> 發生錯誤 (原因: {str(e)[:15]})\n"
 
     send_line_message(report_message)
 
 analyze_stocks(tickers)
+
