@@ -11,7 +11,7 @@ CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 USER_ID = os.environ.get('LINE_USER_ID')
 
 # 設定你想觀察的股票代號
-tickers = ['0050.TW', '0052.TW', '009816.TW', '0056.TW', '00720B.TWO', '00725B.TWO', '00931B.TWO', '00937B.TWO', '00722B.TWO', '00761B.TWO']
+tickers = ['0050.TW', '0052.TW', '00692.TW', '009816.TW', '0056.TW', '00720B.TWO', '00725B.TWO', '00931B.TWO', '00937B.TWO', '00722B.TWO', '00761B.TWO']
 
 # 🌟 升級核心：將發送模式從 push(私訊) 改為 broadcast(廣播)
 def send_line_message(msg):
