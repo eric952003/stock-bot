@@ -9,7 +9,7 @@ import requests
 CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 
 # 設定你想觀察的股票代號
-tickers = ['0050.TW', '0052.TW', '009816.TW', '00692.TW', '0056.TW', '00720B.TWO', '00725B.TWO', '00931B.TWO', '00937B.TWO', '00722B.TWO', '00761B.TWO']
+tickers = ['0050.TW', '0052.TW', '009816.TW', '0056.TW', '00720B.TWO', '00725B.TWO', '00931B.TWO', '00937B.TWO', '00722B.TWO', '00761B.TWO']
 
 def send_line_message(msg):
     url = 'https://api.line.me/v2/bot/message/broadcast'
@@ -36,6 +36,11 @@ def analyze_stocks(tickers):
             latest_close = float(data['Close'].iloc[-1])
             latest_vol = float(data['Volume'].iloc[-1])
             
+            # 準備計算掛單價需要的數據 (5日均線、昨日最高價)
+            data['SMA_5'] = data['Close'].rolling(window=5).mean()
+            latest_SMA5 = float(data['SMA_5'].iloc[-1]) if len(data) >= 5 else latest_close
+            prev_high = float(data['High'].iloc[-2]) if len(data) >= 2 else latest_close
+
             # 🌟 智能計分系統 (初始為0分)
             score = 0
             
@@ -83,20 +88,30 @@ def analyze_stocks(tickers):
                 else:
                     trend_status = "空頭排列"
 
-            # === 4. 綜合判定紅綠燈 ===
+            # === 4. 綜合判定紅綠燈與掛單價 ===
+            suggest_price_text = ""
+            
             if score >= 2:
                 light = "🟢 強烈買進"
+                buy_price = min(latest_close, latest_SMA5)
+                suggest_price_text = f"🎯 建議買價: {buy_price:.2f} 左右 (參考5日線)"
             elif score == 1:
                 light = "🟡 逢低試單"
+                buy_price = min(latest_close, latest_SMA5)
+                suggest_price_text = f"🎯 建議買價: {buy_price:.2f} 左右 (參考5日線)"
             elif score < 0:
                 light = "🔴 獲利/避險"
+                sell_price = max(latest_close, prev_high)
+                suggest_price_text = f"🎯 建議賣價: {sell_price:.2f} 左右 (參考昨高)"
             else:
                 light = "⚪ 繼續觀望"
+                suggest_price_text = "🎯 建議動作: 多看少做，保留資金"
                 
-            # 組合更精簡、直觀的報告文字
+            # 組合最終報告文字
             report_message += f"\n【{ticker}】 {light}\n"
             report_message += f"💸 收盤: {latest_close:.2f}\n"
             report_message += f"📊 狀態: {trend_status} | {kd_status}{vol_alert}\n"
+            report_message += f"{suggest_price_text}\n"
             report_message += "-" * 17 + "\n"
             
         except Exception as e:
