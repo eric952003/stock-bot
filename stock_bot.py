@@ -9,7 +9,7 @@ import requests
 CHANNEL_ACCESS_TOKEN = os.environ.get('LINE_CHANNEL_ACCESS_TOKEN')
 
 # 設定你想觀察的股票代號
-tickers = ['0050.TW', '0052.TW', '009816.TW', '0056.TW', '00720B.TWO', '00725B.TWO', '00931B.TWO', '00937B.TWO', '00679B', '00761B.TWO']
+tickers = ['0050.TW', '0052.TW', '009816.TW', '0056.TW', '00720B.TWO', '00725B.TWO', '00931B.TWO', '00937B.TWO', '00679B.TWO', '00761B.TWO']
 
 def send_line_message(msg):
     url = 'https://api.line.me/v2/bot/message/broadcast'
