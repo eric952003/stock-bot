@@ -36,9 +36,15 @@ def analyze_stocks(tickers):
             prev_close = float(data['Close'].iloc[-2])
             latest_vol = float(data['Volume'].iloc[-1])
             
-            # --- 1. 計算漲跌幅 ---
+            # --- 1. 計算漲跌幅 (🌟 換上台股專屬紅綠配色) ---
             change_pct = ((latest_close - prev_close) / prev_close) * 100
-            change_text = f"(🔺+{change_pct:.1f}%)" if change_pct > 0 else (f"(🔻{change_pct:.1f}%)" if change_pct < 0 else "(平盤)")
+            if change_pct > 0:
+                change_text = f"(🔴🔺 +{change_pct:.1f}%)"
+            elif change_pct < 0:
+                change_text = f"(🟢🔽 {change_pct:.1f}%)"
+            else:
+                change_text = "(⚪ 平盤)"
+                
             alert_header = "🚨【劇烈波動】\n" if abs(change_pct) >= 5.0 else ""
 
             # --- 2. 獲取配息資訊 (TTM 過去一年總和) ---
@@ -46,18 +52,14 @@ def analyze_stocks(tickers):
             last_year_div = 0.0
             div_status = ""
             if not dividends.empty:
-                # 篩選過去 365 天的配息
                 one_year_ago = datetime.now() - timedelta(days=365)
-                # 處理時區問題，統一轉為無時區比較
                 last_year_divs = dividends[dividends.index.tz_localize(None) > one_year_ago]
                 last_year_div = last_year_divs.sum()
                 
-                # 檢查最近 30 天是否有除息
                 recent_divs = dividends[dividends.index.tz_localize(None) > (datetime.now() - timedelta(days=30))]
                 if not recent_divs.empty:
                     div_status = " 🎁近期除息"
 
-            # 計算殖利率
             yield_pct = (last_year_div / latest_close) * 100 if last_year_div > 0 else 0
 
             # --- 3. 智能計分與紅綠燈 ---
@@ -82,7 +84,7 @@ def analyze_stocks(tickers):
                 avg_vol = data['Volume'].rolling(window=5).mean().iloc[-2]
                 if latest_vol > (avg_vol * 2) and latest_K < 50: score += 1
             
-            # 🌟 殖利率加分：如果預估殖利率 > 5%，額外加 1 分
+            # 殖利率加分
             if yield_pct >= 5.0: score += 1
 
             # --- 4. 判定與掛單價 ---
