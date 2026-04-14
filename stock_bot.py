@@ -74,22 +74,33 @@ def analyze_stocks(tickers):
             change_text = f"(🔺+{change_pct:.1f}%)" if change_pct > 0 else (f"(🟢{change_pct:.1f}%)" if change_pct < 0 else "(平盤)")
             alert_header = "🚨【劇烈波動】\n" if abs(change_pct) >= 5.0 else ""
 
-            # --- 2. 獲取配息資訊 (🌟 修復時區 Bug) ---
+            # --- 2. 獲取配息資訊 (🌟 終極無敵防呆版) ---
             dividends = stock.dividends
             last_year_div = 0.0
             div_status = ""
-            if not dividends.empty:
-                one_year_ago = datetime.now() - timedelta(days=365)
-                
-                # 溫和地處理時間格式，不論有沒有時區都能過關
-                try:
-                    clean_dates = dividends.index.tz_localize(None)
-                except TypeError:
-                    clean_dates = dividends.index
+            
+            try:
+                # yfinance 有時會發瘋回傳 DataFrame，強制取第一欄變成 Series
+                if isinstance(dividends, pd.DataFrame):
+                    dividends = dividends.iloc[:, 0]
                     
-                last_year_div = dividends[clean_dates > one_year_ago].sum()
-                recent_divs = dividends[clean_dates > (datetime.now() - timedelta(days=30))]
-                if not recent_divs.empty: div_status = " (近除息)"
+                if isinstance(dividends, pd.Series) and not dividends.empty:
+                    now = datetime.now()
+                    # 捨棄複雜的篩選，直接用迴圈一筆筆比對最安全！
+                    for date, val in dividends.items():
+                        try:
+                            clean_date = date.tz_localize(None)
+                        except Exception:
+                            clean_date = date
+                            
+                        # 確保日期格式正確才計算
+                        if type(clean_date) is pd.Timestamp or type(clean_date) is datetime:
+                            if (now - clean_date).days <= 365:
+                                last_year_div += float(val)
+                            if (now - clean_date).days <= 30:
+                                div_status = " (近除息)"
+            except Exception:
+                pass # 如果配息資料真的爛到讀不出來，就當作 0，不影響後續運算
 
             yield_pct = (last_year_div / latest_close) * 100 if last_year_div > 0 else 0
 
@@ -130,8 +141,7 @@ def analyze_stocks(tickers):
                 if img_url: triggered_charts.append(img_url)
             
         except Exception as e:
-            # 🌟 讓機器人直接回報錯誤原因，方便 debug！
-            report_message += f"【{ticker}】 錯誤: {str(e)[:15]}...\n" + "-" * 17 + "\n"
+            report_message += f"【{ticker}】 錯誤: {str(e)[:15]}\n" + "-" * 17 + "\n"
 
     send_line_message(report_message, triggered_charts)
 
