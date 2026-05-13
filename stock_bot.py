@@ -17,7 +17,7 @@ IMGBB_API_KEY = os.environ.get('IMGBB_API_KEY')
 plt.rcParams['font.sans-serif'] = ['Noto Sans CJK JP', 'Noto Sans CJK TC', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
-tickers = ['0050.TW', '0052.TW', '009816.TW', '0056.TW', '00720B.TWO', '00725B.TWO', '00931B.TWO', '00937B.TWO', '00679B.TWO', '00761B.TWO']
+tickers = ['0050.TW', '0052.TW', '009816.TW', '0056.TW', '00878.TW', '00919.TW', '00403A.TW']
 
 def generate_chart(ticker, title_tag):
     try:
