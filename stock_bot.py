@@ -19,6 +19,9 @@ plt.rcParams['axes.unicode_minus'] = False
 
 tickers = ['0050.TW', '0052.TW', '009816.TW', '0056.TW', '00878.TW', '00919.TW', '00403A.TW']
 
+# ==========================================
+# 📊 功能函式區
+# ==========================================
 def generate_chart(ticker, title_tag):
     try:
         data = yf.Ticker(ticker).history(period='3mo')
@@ -55,8 +58,37 @@ def send_line_message(text_msg, image_urls):
         
     requests.post(url, headers=headers, json={'messages': messages})
 
+def get_institutional_data(ticker_tw):
+    """透過 FinMind API 獲取三大法人買賣超資料"""
+    start_date = (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d')
+    url = "https://api.finmindtrade.com/api/v4/data"
+    parameter = {
+        "dataset": "TaiwanStockInstitutionalInvestorsBuySell",
+        "data_id": ticker_tw,
+        "start_date": start_date,
+    }
+    
+    try:
+        response = requests.get(url, params=parameter)
+        data = response.json()
+        if data.get("msg") == "success" and len(data.get("data", [])) > 0:
+            df = pd.DataFrame(data["data"])
+            # 將三大法人的買進、賣出、淨買賣超按日期加總
+            daily_data = df.groupby('date').agg({
+                'buy': 'sum',
+                'sell': 'sum',
+                'sell_buy': 'sum'
+            }).reset_index()
+            return daily_data.sort_values('date').tail(2) # 回傳近兩日資料
+    except Exception as e:
+        pass # 抓不到就略過，不影響主程式運行
+    return None
+
+# ==========================================
+# 🚀 主邏輯區
+# ==========================================
 def analyze_stocks(tickers):
-    report_message = "📊 【股票小秘書】圖文旗艦完全體\n" + "=" * 20 + "\n"
+    report_message = "📊 【股票小秘書】籌碼旗艦完全體\n" + "=" * 20 + "\n"
     triggered_charts = []
     
     for ticker in tickers:
@@ -74,33 +106,29 @@ def analyze_stocks(tickers):
             change_text = f"(🔺+{change_pct:.1f}%)" if change_pct > 0 else (f"(🟢{change_pct:.1f}%)" if change_pct < 0 else "(平盤)")
             alert_header = "🚨【劇烈波動】\n" if abs(change_pct) >= 5.0 else ""
 
-            # --- 2. 獲取配息資訊 (🌟 終極無敵防呆版) ---
+            # --- 2. 獲取配息資訊 ---
             dividends = stock.dividends
             last_year_div = 0.0
             div_status = ""
             
             try:
-                # yfinance 有時會發瘋回傳 DataFrame，強制取第一欄變成 Series
                 if isinstance(dividends, pd.DataFrame):
                     dividends = dividends.iloc[:, 0]
-                    
                 if isinstance(dividends, pd.Series) and not dividends.empty:
                     now = datetime.now()
-                    # 捨棄複雜的篩選，直接用迴圈一筆筆比對最安全！
                     for date, val in dividends.items():
                         try:
                             clean_date = date.tz_localize(None)
                         except Exception:
                             clean_date = date
                             
-                        # 確保日期格式正確才計算
                         if type(clean_date) is pd.Timestamp or type(clean_date) is datetime:
                             if (now - clean_date).days <= 365:
                                 last_year_div += float(val)
                             if (now - clean_date).days <= 30:
                                 div_status = " (近除息)"
             except Exception:
-                pass # 如果配息資料真的爛到讀不出來，就當作 0，不影響後續運算
+                pass 
 
             yield_pct = (last_year_div / latest_close) * 100 if last_year_div > 0 else 0
 
@@ -119,23 +147,57 @@ def analyze_stocks(tickers):
             if len(data) >= 6 and latest_vol > (float(data['Volume'].rolling(window=5).mean().iloc[-2]) * 2) and latest_K < 50: score += 1
             if yield_pct >= 5.0: score += 1
 
-            # --- 4. 判定與掛單價 ---
+            # --- 4. 🌟 籌碼面分析 (FinMind) ---
+            chip_light = ""
+            pure_ticker = ticker.replace('.TW', '').replace('.TWO', '')
+            inst_data = get_institutional_data(pure_ticker)
+            
+            if inst_data is not None and len(inst_data) >= 2:
+                day_minus_1_net = inst_data['sell_buy'].iloc[-2]
+                day_latest_net = inst_data['sell_buy'].iloc[-1]
+                latest_inst_buy_vol = inst_data['buy'].iloc[-1]
+                latest_inst_sell_vol = inst_data['sell'].iloc[-1]
+                
+                # 【買盤邏輯】
+                if day_minus_1_net > 0 and day_latest_net > 0:
+                    score += 1
+                    chip_light += "🟢連買 "
+                
+                inst_buy_ratio = latest_inst_buy_vol / (latest_vol + 0.0001) 
+                if inst_buy_ratio > 0.15: # 法人買超佔比 > 15%
+                    score += 1
+                    chip_light += f"🟢買佔({inst_buy_ratio*100:.0f}%) "
+                    
+                # 【賣盤邏輯】
+                if day_minus_1_net < 0 and day_latest_net < 0:
+                    score -= 1
+                    chip_light += "🔴連賣 "
+                    
+                inst_sell_ratio = latest_inst_sell_vol / (latest_vol + 0.0001)
+                if inst_sell_ratio > 0.15: # 法人賣超佔比 > 15%
+                    score -= 1
+                    chip_light += f"🔴賣佔({inst_sell_ratio*100:.0f}%) "
+
+            # --- 5. 判定與掛單價 ---
             data['SMA_5'] = data['Close'].rolling(window=5).mean()
             latest_SMA5 = float(data['SMA_5'].iloc[-1]) if len(data) >= 5 else latest_close
             prev_high = float(data['High'].iloc[-2]) if len(data) >= 2 else latest_close
 
             if score >= 2: light, suggest = "🟢強烈買進", f"買點: {min(latest_close, latest_SMA5):.2f}"
             elif score == 1: light, suggest = "🟡逢低試單", f"買點: {min(latest_close, latest_SMA5):.2f}"
-            elif score < 0: light, suggest = "🔴獲利避險", f"賣點: {max(latest_close, prev_high):.2f}"
+            elif score < 0: light, suggest = "🔴避險/減碼", f"賣點: {max(latest_close, prev_high):.2f}"
             else: light, suggest = "⚪繼續觀望", "建議: 多看少做"
 
-            # --- 5. 組合報告 ---
+            # --- 6. 組合報告 ---
             report_message += f"{alert_header}【{ticker}】{light}\n"
             report_message += f"收盤: {latest_close:.2f} {change_text}\n"
             report_message += f"殖利: {yield_pct:.1f}%{div_status} | K值: {latest_K:.1f}\n"
+            if chip_light:
+                report_message += f"籌碼: {chip_light}\n"
             report_message += f"🎯 {suggest}\n"
             report_message += "-" * 17 + "\n"
 
+            # 觸發繪圖條件 (分數夠高或夠低)
             if score >= 2 or score < 0:
                 img_url = generate_chart(ticker, light)
                 if img_url: triggered_charts.append(img_url)
@@ -145,4 +207,9 @@ def analyze_stocks(tickers):
 
     send_line_message(report_message, triggered_charts)
 
-analyze_stocks(tickers)
+# 執行程式
+if __name__ == "__main__":
+    if CHANNEL_ACCESS_TOKEN and IMGBB_API_KEY:
+        analyze_stocks(tickers)
+    else:
+        print("請先設定環境變數：LINE_CHANNEL_ACCESS_TOKEN 與 IMGBB_API_KEY")
