@@ -58,8 +58,8 @@ def send_line_message(text_msg, image_urls):
     requests.post(url, headers=headers, json={'messages': messages})
 
 def get_institutional_data(ticker_tw):
-    """透過 FinMind API 獲取三大法人買賣超資料 (安全防呆修正版)"""
-    start_date = (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d')
+    """透過 FinMind API 獲取三大法人買賣超資料 (獲取近5日以判斷延續性)"""
+    start_date = (datetime.now() - timedelta(days=15)).strftime('%Y-%m-%d') # 拉長日期確保有5個交易日
     url = "https://api.finmindtrade.com/api/v4/data"
     parameter = {
         "dataset": "TaiwanStockInstitutionalInvestorsBuySell",
@@ -74,17 +74,17 @@ def get_institutional_data(ticker_tw):
         if data.get("msg") == "success" and len(data.get("data", [])) > 0:
             df = pd.DataFrame(data["data"])
             
-            # 【核心修正】手動用買進與賣出計算出淨買賣超欄位，避免 KeyError
+            # 手動計算淨買賣超，避免 KeyError
             df['sell_buy'] = df['buy'] - df['sell']
             
-            # 將三大法人的買進、賣出、淨買賣超按日期分組加總
+            # 依日期加總三大法人數據
             daily_data = df.groupby('date').agg({
                 'buy': 'sum',
                 'sell': 'sum',
                 'sell_buy': 'sum'
             }).reset_index()
             
-            return daily_data.sort_values('date').tail(2) # 回傳近兩日交易資料
+            return daily_data.sort_values('date').tail(5) # 回傳近 5 日資料
         else:
             print(f"[{ticker_tw}] FinMind 回傳異常或無資料: {data.get('msg')}")
             
@@ -97,7 +97,7 @@ def get_institutional_data(ticker_tw):
 # 🚀 主邏輯區
 # ==========================================
 def analyze_stocks(tickers):
-    report_message = "📊 【股票小秘書】籌碼旗艦完全體\n" + "=" * 20 + "\n"
+    report_message = "📊 【股票小秘書】籌碼量化完全體\n" + "=" * 20 + "\n"
     triggered_charts = []
     
     for ticker in tickers:
@@ -108,7 +108,7 @@ def analyze_stocks(tickers):
             
             latest_close = float(data['Close'].iloc[-1])
             prev_close = float(data['Close'].iloc[-2])
-            latest_vol = float(data['Volume'].iloc[-1])
+            latest_vol = float(data['Volume'].iloc[-1]) # 成交股數
             
             # --- 1. 計算漲跌幅 ---
             change_pct = ((latest_close - prev_close) / prev_close) * 100
@@ -156,36 +156,61 @@ def analyze_stocks(tickers):
             if len(data) >= 6 and latest_vol > (float(data['Volume'].rolling(window=5).mean().iloc[-2]) * 2) and latest_K < 50: score += 1
             if yield_pct >= 5.0: score += 1
 
-            # --- 4. 籌碼面分析 (整合防呆模組) ---
+            # --- 4. 🌟 籌碼面強度觀測 (多維度判定) ---
             chip_light = ""
             pure_ticker = ticker.replace('.TW', '').replace('.TWO', '')
             inst_data = get_institutional_data(pure_ticker)
             
-            if inst_data is not None and len(inst_data) >= 2:
-                day_minus_1_net = inst_data['sell_buy'].iloc[-2]
-                day_latest_net = inst_data['sell_buy'].iloc[-1]
-                latest_inst_buy_vol = inst_data['buy'].iloc[-1]
-                latest_inst_sell_vol = inst_data['sell'].iloc[-1]
+            if inst_data is not None and not inst_data.empty:
+                chip_score = 0
+                chip_tags = []
                 
-                # 【多方籌碼燈號】
-                if day_minus_1_net > 0 and day_latest_net > 0:
-                    score += 1
-                    chip_light += "🟢連買 "
+                # 將每日「淨買賣超」轉為 List，順序由舊到新
+                net_flows = inst_data['sell_buy'].tolist()
+                latest_net = net_flows[-1]
+                prev_net = net_flows[-2] if len(net_flows) >= 2 else 0
                 
-                inst_buy_ratio = latest_inst_buy_vol / (latest_vol + 0.0001) 
-                if inst_buy_ratio > 0.15: 
-                    score += 1
-                    chip_light += f"🟢買佔({inst_buy_ratio*100:.0f}%) "
+                # 計算最新一日的「淨買賣超佔比」
+                net_ratio = latest_net / (latest_vol + 0.0001)
+                
+                # 計算連續買/賣天數
+                consecutive_buys = 0
+                consecutive_sells = 0
+                for flow in reversed(net_flows):
+                    if flow > 0:
+                        if consecutive_sells > 0: break
+                        consecutive_buys += 1
+                    elif flow < 0:
+                        if consecutive_buys > 0: break
+                        consecutive_sells += 1
+
+                # 【多方強度判定】
+                if latest_net > 0:
+                    if consecutive_buys >= 3 or net_ratio > 0.15:
+                        chip_score += 2
+                        chip_tags.append(f"🔥極強買({consecutive_buys}連,佔{net_ratio*100:.0f}%)")
+                    elif consecutive_buys == 2 or net_ratio > 0.05:
+                        chip_score += 1
+                        chip_tags.append(f"🟢溫買({consecutive_buys}連,佔{net_ratio*100:.0f}%)")
                     
-                # 【空方籌碼燈號】
-                if day_minus_1_net < 0 and day_latest_net < 0:
-                    score -= 1
-                    chip_light += "🔴連賣 "
+                    if latest_net > prev_net > 0:
+                        chip_tags.append("↗️擴大")
+
+                # 【空方強度判定】
+                elif latest_net < 0:
+                    if consecutive_sells >= 3 or net_ratio < -0.15:
+                        chip_score -= 2
+                        chip_tags.append(f"🩸極強賣({consecutive_sells}連,佔{abs(net_ratio)*100:.0f}%)")
+                    elif consecutive_sells == 2 or net_ratio < -0.05:
+                        chip_score -= 1
+                        chip_tags.append(f"🔴溫賣({consecutive_sells}連,佔{abs(net_ratio)*100:.0f}%)")
                     
-                inst_sell_ratio = latest_inst_sell_vol / (latest_vol + 0.0001)
-                if inst_sell_ratio > 0.15: 
-                    score -= 1
-                    chip_light += f"🔴賣佔({inst_sell_ratio*100:.0f}%) "
+                    if latest_net < prev_net < 0:
+                        chip_tags.append("↘️擴大")
+
+                score += chip_score # 將籌碼強度分數併入總分
+                if chip_tags:
+                    chip_light = " | ".join(chip_tags)
 
             # --- 5. 判定與掛單價 ---
             data['SMA_5'] = data['Close'].rolling(window=5).mean()
@@ -201,8 +226,11 @@ def analyze_stocks(tickers):
             report_message += f"{alert_header}【{ticker}】{light}\n"
             report_message += f"收盤: {latest_close:.2f} {change_text}\n"
             report_message += f"殖利: {yield_pct:.1f}%{div_status} | K值: {latest_K:.1f}\n"
+            
+            # 如果有抓到籌碼燈號，就顯示出來
             if chip_light:
                 report_message += f"籌碼: {chip_light}\n"
+                
             report_message += f"🎯 {suggest}\n"
             report_message += "-" * 17 + "\n"
 
