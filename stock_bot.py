@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import io
 import base64
-import matplotlib.font_manager as fm
 
 # ==========================================
 # 🔐 鑰匙與字型設定
@@ -59,7 +58,7 @@ def send_line_message(text_msg, image_urls):
     requests.post(url, headers=headers, json={'messages': messages})
 
 def get_institutional_data(ticker_tw):
-    """透過 FinMind API 獲取三大法人買賣超資料"""
+    """透過 FinMind API 獲取三大法人買賣超資料 (安全防呆修正版)"""
     start_date = (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d')
     url = "https://api.finmindtrade.com/api/v4/data"
     parameter = {
@@ -69,19 +68,29 @@ def get_institutional_data(ticker_tw):
     }
     
     try:
-        response = requests.get(url, params=parameter)
+        response = requests.get(url, params=parameter, timeout=5)
         data = response.json()
+        
         if data.get("msg") == "success" and len(data.get("data", [])) > 0:
             df = pd.DataFrame(data["data"])
-            # 將三大法人的買進、賣出、淨買賣超按日期加總
+            
+            # 【核心修正】手動用買進與賣出計算出淨買賣超欄位，避免 KeyError
+            df['sell_buy'] = df['buy'] - df['sell']
+            
+            # 將三大法人的買進、賣出、淨買賣超按日期分組加總
             daily_data = df.groupby('date').agg({
                 'buy': 'sum',
                 'sell': 'sum',
                 'sell_buy': 'sum'
             }).reset_index()
-            return daily_data.sort_values('date').tail(2) # 回傳近兩日資料
+            
+            return daily_data.sort_values('date').tail(2) # 回傳近兩日交易資料
+        else:
+            print(f"[{ticker_tw}] FinMind 回傳異常或無資料: {data.get('msg')}")
+            
     except Exception as e:
-        pass # 抓不到就略過，不影響主程式運行
+        print(f"[{ticker_tw}] 法人資料讀取發生錯誤: {e}")
+        
     return None
 
 # ==========================================
@@ -147,7 +156,7 @@ def analyze_stocks(tickers):
             if len(data) >= 6 and latest_vol > (float(data['Volume'].rolling(window=5).mean().iloc[-2]) * 2) and latest_K < 50: score += 1
             if yield_pct >= 5.0: score += 1
 
-            # --- 4. 🌟 籌碼面分析 (FinMind) ---
+            # --- 4. 籌碼面分析 (整合防呆模組) ---
             chip_light = ""
             pure_ticker = ticker.replace('.TW', '').replace('.TWO', '')
             inst_data = get_institutional_data(pure_ticker)
@@ -158,23 +167,23 @@ def analyze_stocks(tickers):
                 latest_inst_buy_vol = inst_data['buy'].iloc[-1]
                 latest_inst_sell_vol = inst_data['sell'].iloc[-1]
                 
-                # 【買盤邏輯】
+                # 【多方籌碼燈號】
                 if day_minus_1_net > 0 and day_latest_net > 0:
                     score += 1
                     chip_light += "🟢連買 "
                 
                 inst_buy_ratio = latest_inst_buy_vol / (latest_vol + 0.0001) 
-                if inst_buy_ratio > 0.15: # 法人買超佔比 > 15%
+                if inst_buy_ratio > 0.15: 
                     score += 1
                     chip_light += f"🟢買佔({inst_buy_ratio*100:.0f}%) "
                     
-                # 【賣盤邏輯】
+                # 【空方籌碼燈號】
                 if day_minus_1_net < 0 and day_latest_net < 0:
                     score -= 1
                     chip_light += "🔴連賣 "
                     
                 inst_sell_ratio = latest_inst_sell_vol / (latest_vol + 0.0001)
-                if inst_sell_ratio > 0.15: # 法人賣超佔比 > 15%
+                if inst_sell_ratio > 0.15: 
                     score -= 1
                     chip_light += f"🔴賣佔({inst_sell_ratio*100:.0f}%) "
 
