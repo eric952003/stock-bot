@@ -17,7 +17,7 @@ plt.rcParams['font.sans-serif'] = ['Noto Sans CJK JP', 'Noto Sans CJK TC', 'Deja
 plt.rcParams['axes.unicode_minus'] = False
 
 # 監控清單：涵蓋大盤與高股息動能 ETF
-tickers = ['0050.TW', '0056.TW', '00878.TW', '00713.TW', '00919.TW', '00929.TW']
+tickers = ['0050.TW', '0056.TW', '00878.TW', '009826.TW', '00919.TW', '00929.TW','009816.TW']
 
 # ==========================================
 # 📊 功能函式區
