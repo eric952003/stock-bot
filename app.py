@@ -10,7 +10,7 @@ st.set_page_config(page_title="股票小秘書管理後台", page_icon="📈")
 # 實務上部署到雲端時，這兩個變數會寫在 Streamlit Secrets 中
 # 在本地測試時，可以直接把 Token 貼在這裡取代 st.secrets
 GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"] 
-REPO_NAME = "你的GitHub帳號/stock-bot" # 請務必換成你自己的專案名稱，例如 "eric952003/stock-bot"
+REPO_NAME = "eric952003/stock-bot" # 請務必換成你自己的專案名稱，例如 "eric952003/stock-bot"
 
 # 登入 GitHub
 g = Github(GITHUB_TOKEN)
