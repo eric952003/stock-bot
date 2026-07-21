@@ -222,9 +222,9 @@ def analyze_stocks(tickers):
             elif score < 0: light, suggest = "🔴避險減碼", f"賣點: {max(latest_close, prev_high):.2f}"
             else: light, suggest = "⚪繼續觀望", "建議: 多看少做"
 
-            # --- 6. 優化後的清爽版報告組合 ---
+           # --- 6. 優化後的清爽版報告組合 ---
             clean_ticker = ticker.replace('.TW', '').replace('.TWO', '')
-            report_message += f"{alert_header}**【{clean_ticker}】{light} {change_text}**\n"
+            report_message += f"{alert_header}【{clean_ticker}】{light} {change_text}\n"
             
             base_info = f"💰 {latest_close:.2f} | K值: {latest_K:.1f}"
             if yield_pct >= 3.0: 
