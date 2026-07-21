@@ -16,8 +16,22 @@ IMGBB_API_KEY = os.environ.get('IMGBB_API_KEY')
 plt.rcParams['font.sans-serif'] = ['Noto Sans CJK JP', 'Noto Sans CJK TC', 'DejaVu Sans']
 plt.rcParams['axes.unicode_minus'] = False
 
-# 監控清單：涵蓋大盤與高股息動能 ETF
-tickers = ['0050.TW', '0056.TW', '00878.TW', '009826.TW', '00919.TW', '00929.TW','009816.TW']
+# 找到原本這行並刪除：
+# tickers = ['0050.TW', '0056.TW', '00878.TW', '00713.TW', '00919.TW', '00929.TW']
+
+# 替換為以下動態讀取邏輯：
+def load_tickers_from_file(filename="tickers.txt"):
+    try:
+        with open(filename, "r") as f:
+            # 讀取每行代號，過濾掉空白，並自動加上 .TW
+            base_tickers = [line.strip() for line in f.readlines() if line.strip()]
+            return [f"{t}.TW" for t in base_tickers]
+    except Exception as e:
+        print(f"讀取清單失敗，使用預設值。錯誤: {e}")
+        return ['0050.TW', '0056.TW', '00878.TW']
+
+# 執行讀取
+tickers = load_tickers_from_file()
 
 # ==========================================
 # 📊 功能函式區
