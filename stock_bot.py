@@ -28,7 +28,7 @@ def load_tickers_from_file(filename="tickers.txt"):
             return [f"{t}.TW" for t in base_tickers]
     except Exception as e:
         print(f"讀取清單失敗，使用預設值。錯誤: {e}")
-        return ['0050.TW', '0056.TW', '00878.TW']
+        return ['0050.TW', '0056.TW', '00878.TW', '00713.TW', '00919.TW', '00929.TW']
 
 # 執行讀取
 tickers = load_tickers_from_file()
