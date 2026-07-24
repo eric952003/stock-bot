@@ -1,6 +1,7 @@
 import streamlit as st
+import yfinance as yf
+import pandas as pd
 from github import Github
-import os
 
 # ==========================================
 # ⚙️ 設定區
@@ -84,3 +85,55 @@ if st.button("🚀 一鍵立即掃描"):
         except Exception as e:
             st.error(f"❌ 觸發失敗，錯誤訊息：{e}")
             st.info("💡 提示：請確認您的 schedule.yml 中是否已加上 `workflow_dispatch:`，或是檢查檔名是否拼錯。")
+st.divider()
+st.subheader("📊 網頁端即時動能掃描")
+
+# 建立網頁內掃描按鈕
+if st.button("🔍 立即在網頁查看最新數據"):
+    with st.spinner("正在為您抓取最新股價與動能資料..."):
+        results = []
+        
+        # 逐一掃描清單中的股票
+        for ticker in current_tickers:
+            try:
+                # Yahoo Finance 的台股代號需要加上 .TW
+                yf_ticker = f"{ticker}.TW"
+                stock = yf.Ticker(yf_ticker)
+                
+                # 抓取最近兩天的歷史資料來計算漲跌
+                hist = stock.history(period="2d")
+                
+                if len(hist) >= 2:
+                    today_close = hist['Close'].iloc[-1]
+                    yesterday_close = hist['Close'].iloc[-2]
+                    change_percent = ((today_close - yesterday_close) / yesterday_close) * 100
+                    volume = hist['Volume'].iloc[-1]
+                    
+                    # 將計算結果加入列表
+                    results.append({
+                        "股票代號": ticker,
+                        "最新收盤價": round(today_close, 2),
+                        "漲跌幅 (%)": round(change_percent, 2),
+                        "成交量": f"{int(volume):,}"
+                    })
+            except Exception as e:
+                st.warning(f"無法抓取 {ticker} 的資料，請確認代號是否正確。")
+
+        # 顯示掃描結果
+        if results:
+            # 轉換成 Pandas 表格
+            df = pd.DataFrame(results)
+            
+            # 在 Streamlit 中顯示精美表格
+            # (台股習慣紅漲綠跌，這裡加上簡單的顏色標示)
+            st.dataframe(
+                df.style.map(
+                    lambda x: 'color: red' if x > 0 else ('color: green' if x < 0 else ''), 
+                    subset=['漲跌幅 (%)']
+                ),
+                use_container_width=True,
+                hide_index=True
+            )
+            st.success("✅ 掃描完成！以上為最新盤後/盤中數據。")
+        else:
+            st.error("❌ 掃描失敗，請確認清單內是否有有效的股票代號。")
