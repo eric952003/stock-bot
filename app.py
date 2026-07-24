@@ -95,13 +95,20 @@ if st.button("🔍 立即在網頁查看最新數據"):
         
         # 逐一掃描清單中的股票
         for ticker in current_tickers:
+            # 👉 核心修正 1：清除隱藏的空白或換行符號
+            clean_ticker = ticker.strip() 
+            
+            # 如果是空行就直接跳過
+            if not clean_ticker:
+                continue
+                
             try:
                 # Yahoo Finance 的台股代號需要加上 .TW
-                yf_ticker = f"{ticker}.TW"
+                yf_ticker = f"{clean_ticker}.TW"
                 stock = yf.Ticker(yf_ticker)
                 
-                # 抓取最近兩天的歷史資料來計算漲跌
-                hist = stock.history(period="2d")
+                # 👉 核心修正 2：把 2d 改成 5d 確保遇到連假也能抓到足夠的資料
+                hist = stock.history(period="5d") 
                 
                 if len(hist) >= 2:
                     today_close = hist['Close'].iloc[-1]
@@ -111,13 +118,16 @@ if st.button("🔍 立即在網頁查看最新數據"):
                     
                     # 將計算結果加入列表
                     results.append({
-                        "股票代號": ticker,
+                        "股票代號": clean_ticker,
                         "最新收盤價": round(today_close, 2),
                         "漲跌幅 (%)": round(change_percent, 2),
                         "成交量": f"{int(volume):,}"
                     })
+                else:
+                    # 如果真的找不到資料，顯示具體是哪一檔出錯
+                    st.warning(f"⚠️ 找不到 {clean_ticker} 的足夠歷史資料，請確認代號是否為上市股票。")
             except Exception as e:
-                st.warning(f"無法抓取 {ticker} 的資料，請確認代號是否正確。")
+                st.warning(f"⚠️ 抓取 {clean_ticker} 時發生錯誤：{e}")
 
         # 顯示掃描結果
         if results:
@@ -125,7 +135,6 @@ if st.button("🔍 立即在網頁查看最新數據"):
             df = pd.DataFrame(results)
             
             # 在 Streamlit 中顯示精美表格
-            # (台股習慣紅漲綠跌，這裡加上簡單的顏色標示)
             st.dataframe(
                 df.style.map(
                     lambda x: 'color: red' if x > 0 else ('color: green' if x < 0 else ''), 
