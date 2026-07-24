@@ -67,3 +67,20 @@ for ticker in current_tickers:
         repo.update_file(file_content.path, f"刪除 {ticker} 透過 Web UI", new_content, file_content.sha)
         st.success(f"已刪除 {ticker}！")
         st.rerun()
+st.divider() # 加一條分隔線讓畫面比較乾淨
+st.subheader("⚡ 機器人手動控制台")
+
+# 建立一個啟動按鈕
+if st.button("🚀 一鍵立即掃描"):
+    with st.spinner("正在發送強制啟動指令給 GitHub..."):
+        try:
+            # 抓取你的自動化腳本檔案 (檔名需與你設定的一致)
+            workflow = repo.get_workflow("schedule.yml")
+            
+            # 針對 main 分支發送強制執行指令
+            workflow.create_dispatch(ref="main")
+            
+            st.success("✅ 觸發成功！選股機器人已強制啟動，請稍候並留意您的推播通知。")
+        except Exception as e:
+            st.error(f"❌ 觸發失敗，錯誤訊息：{e}")
+            st.info("💡 提示：請確認您的 schedule.yml 中是否已加上 `workflow_dispatch:`，或是檢查檔名是否拼錯。")
